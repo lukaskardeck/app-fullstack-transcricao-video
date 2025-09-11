@@ -1,6 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import { verifyToken } from "./middleware/auth";
 
 dotenv.config();
 
@@ -16,6 +17,10 @@ app.get("/", (req: Request, res: Response) => {
 
 app.get("/api/hello", (req, res) => {
   res.json({ message: "Backend está vivo!" });
+});
+
+app.get("/api/secure", verifyToken, (req, res) => {
+  res.json({ message: "Acesso autorizado", user: (req as any).user });
 });
 
 app.listen(PORT, () => {
