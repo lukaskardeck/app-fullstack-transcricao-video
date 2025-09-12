@@ -26,7 +26,7 @@ export default function LoginPage() {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const token = await userCred.user.getIdToken();
       setMsg(`Logado como ${userCred.user.email}`);
-      console.log("Token:", token);
+      // console.log("Token:", token);
     } catch (err: any) {
       setMsg("Erro: " + err.message);
     }
