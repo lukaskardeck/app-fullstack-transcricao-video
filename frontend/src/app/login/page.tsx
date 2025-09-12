@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 
 export default function LoginPage() {
+  const router = useRouter();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState("");
@@ -25,8 +28,12 @@ export default function LoginPage() {
     try {
       const userCred = await signInWithEmailAndPassword(auth, email, password);
       const token = await userCred.user.getIdToken();
+      console.log("Token Firebase:", token);
+
       setMsg(`Logado como ${userCred.user.email}`);
-      // console.log("Token:", token);
+
+      // redireciona para a home (raiz "/")
+      router.push("/");
     } catch (err: any) {
       setMsg("Erro: " + err.message);
     }
