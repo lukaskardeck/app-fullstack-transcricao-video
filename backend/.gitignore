@@ -18,3 +18,6 @@ node_modules
 
 # Firebase service account
 src/config/*.json
+
+# Diretório onde ficarão os vídeos enviados pelos usuários
+uploads/
