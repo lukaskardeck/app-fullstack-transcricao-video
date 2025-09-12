@@ -84,9 +84,9 @@ export default function HomePage() {
       setTranscriptions((prev) => [
         {
           id: newTranscription.id,
-          fileName: newTranscription.file.originalName,
-          status: "pending",
-          createdAt: new Date().toISOString(),
+          fileName: newTranscription.fileName,
+          status: newTranscription.status,
+          createdAt: newTranscription.createdAt,
         },
         ...prev,
       ]);
@@ -140,8 +140,8 @@ export default function HomePage() {
                           t.status === "done"
                             ? "text-green-600"
                             : t.status === "pending"
-                            ? "text-yellow-600"
-                            : "text-gray-600"
+                              ? "text-yellow-600"
+                              : "text-gray-600"
                         }
                       >
                         {t.status}

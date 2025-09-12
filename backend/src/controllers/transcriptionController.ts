@@ -1,40 +1,56 @@
 import { Request, Response } from "express";
 import { db } from "../config/firebase";
+import { convertVideoToAudio } from "../services/ffmpegService";
+import { transcribeAudio } from "../services/openaiService";
+import fs from "fs";
+import { TranscriptionStatus } from "../enum/TranscriptionStatus";
 
+
+// Solicitação de transcrição de vídeo
 export async function createTranscriptionRequest(req: Request, res: Response) {
-  const user = (req as any).user; // adicionado pelo verifyToken
+  const user = (req as any).user;
   const file = req.file;
 
   if (!file) {
     return res.status(400).json({ error: "Arquivo não enviado" });
   }
 
+  // cria registro inicial
+  const docRef = await db.collection("transcriptions").add({
+    userId: user.uid,
+    fileName: file.originalname,
+    status: TranscriptionStatus.PENDING,
+    createdAt: new Date(),
+  });
+
+  // resposta imediata ao cliente
+  res.status(202).json({
+    id: docRef.id,
+    fileName: file.originalname,
+    status: TranscriptionStatus.PENDING,
+    createdAt: new Date().toISOString(),
+  });
+
+  // processamento assíncrono
   try {
-    // Criar documento no Firestore
-    const docRef = await db.collection("transcriptions").add({
-      userId: user.uid,
-      fileName: file.originalname,
-      storedName: file.filename,
-      sizeBytes: file.size,
-      videoPath: file.path,
-      status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const audioPath = await convertVideoToAudio(file.path);
+
+    const transcription = await transcribeAudio(audioPath);
+
+    await db.collection("transcriptions").doc(docRef.id).update({
+      status: TranscriptionStatus.DONE,
+      transcript: transcription,
+      finishedAt: new Date(),
     });
 
-    return res.status(202).json({
-      id: docRef.id,
-      message: `Arquivo recebido para usuário ${user.uid}`,
-      file: {
-        originalName: file.originalname,
-        storedName: file.filename,
-        size: file.size,
-        path: file.path,
-      },
+    // remove arquivos temporários
+    fs.unlinkSync(file.path);
+    fs.unlinkSync(audioPath);
+  } catch (err) {
+    await db.collection("transcriptions").doc(docRef.id).update({
+      status: TranscriptionStatus.ERROR,
+      error: (err as Error).message,
     });
-  } catch (err: any) {
-    console.error("Erro ao criar doc Firestore:", err);
-    return res.status(500).json({ error: "Erro interno ao salvar transcrição" });
   }
 }
 
