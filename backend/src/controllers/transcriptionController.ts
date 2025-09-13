@@ -78,3 +78,33 @@ export const listTranscriptions = async (req: any, res: Response) => {
   }
 };
 
+
+// Atualizar transcrição existente
+export const updateTranscription = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { transcript } = req.body;
+
+    if (!transcript) {
+      return res.status(400).json({ error: "Campo 'transcript' é obrigatório" });
+    }
+
+    const ref = db.collection("transcriptions").doc(id);
+    const doc = await ref.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Transcrição não encontrada" });
+    }
+
+    await ref.update({
+      transcript,
+      updatedAt: new Date(),
+    });
+
+    const updated = await ref.get();
+    return res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err: any) {
+    console.error("Erro ao atualizar transcrição:", err);
+    return res.status(500).json({ error: "Erro interno no servidor" });
+  }
+};
