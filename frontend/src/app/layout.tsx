@@ -1,18 +1,33 @@
-// frontend/app/layout.tsx
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-export const metadata = {
-  title: "Plataforma de Transcrição",
-  description: "MVP de estágio - Upload e Transcrição de vídeos",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "Transcription App",
+  description: "A web application for transcribing audio and video files from Liven Challenger",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="pt-BR">
-      <body className="bg-gray-50 text-gray-900">
-        <main className="min-h-screen flex items-center justify-center">
+    <html lang="en">
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
           {children}
-        </main>
       </body>
     </html>
   );

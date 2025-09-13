@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
-*, *::before, *::after {
+/* *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
+} */
 
-body {
+/* body {
   font-family: sans-serif;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -14,4 +14,4 @@ body {
 
 input, button, textarea, select {
   font: inherit;
-}
+} */
