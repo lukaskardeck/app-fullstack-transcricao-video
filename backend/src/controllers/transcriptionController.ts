@@ -3,7 +3,7 @@ import { db } from "../config/firebase";
 import { convertVideoToAudio } from "../services/ffmpegService";
 import { transcribeAudio } from "../services/openaiService";
 import fs from "fs";
-import { createTranscription, listTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
+import { createTranscription, getTranscriptionById, listTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
 
 
 // Solicitação de transcrição de vídeo
@@ -67,5 +67,24 @@ export const updateTranscription = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro interno no servidor" });
+  }
+};
+
+// Download da transcrição
+export const downloadTranscription = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const transcription = await getTranscriptionById(id);
+    if (!transcription) return res.status(404).json({ error: "Transcrição não encontrada" });
+
+    const text = transcription.transcript || "";
+    const filename = transcription.fileName.replace(/\.[^/.]+$/, "") + ".txt";
+
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Type", "text/plain;charset=utf-8");
+    res.send(text);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao gerar download" });
   }
 };

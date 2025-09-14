@@ -43,7 +43,33 @@ export default function TranscriptionModal({ transcription, open, onClose }: Pro
   };
 
   const handleDownload = async () => {
-    //
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const token = await user.getIdToken();
+
+      const res = await fetch(`http://localhost:8080/api/transcription/download/${transcription.id}`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Falha ao obter transcrição");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = transcription.fileName.replace(/\.[^/.]+$/, "") + ".txt";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Download iniciado!");
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.message);
+    }
   };
 
   const handleSaveEdit = async () => {
