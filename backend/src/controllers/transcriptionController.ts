@@ -3,76 +3,49 @@ import { db } from "../config/firebase";
 import { convertVideoToAudio, getVideoDuration } from "../services/ffmpegService";
 import { transcribeAudio } from "../services/openaiService";
 import fs from "fs";
-import { createTranscription, getTranscriptionById, listTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
-import { getUserById } from "../models/User";
-import { createUsageLog, updateUsageLogStatus } from "../models/UsageLog";
+import { createTranscription, getTranscriptionById, getTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
+import { getUserById } from "../models/UserModel";
+import { createUsageLog, updateUsageLogStatus, UsageStatus } from "../models/UsageLogModel";
+import { checkDailyQuota } from "../services/quotaService";
+import { processTranscriptionAsync } from "../services/transcriptionService";
 
-// Solicitação de transcrição de vídeo
+// Upload de vídeo e criação da transcrição
 export async function createTranscriptionRequest(req: Request, res: Response) {
   const user = (req as any).user;
   const file = req.file;
-
   if (!file) return res.status(400).json({ error: "Arquivo não enviado" });
 
   try {
-    // Verifica se o usuário existe no banco de dados
     const userData = await getUserById(user.uid);
     if (!userData) return res.status(404).json({ error: "Usuário não encontrado" });
-  
-    // Obtém a duração do arquivo em segundos
+
     const duration = await getVideoDuration(file.path);
+    const canUpload = await checkDailyQuota(user.uid, duration);
+    if (!canUpload) return res.status(403).json({ error: "O arquivo excede o limite diário de upload" });
 
-    // Pega a extensão do arquivo (ex: .mp4, .mp3, etc.)
-    const extension = file.originalname.split('.').pop() || '';
+    const extension = file.originalname.split(".").pop() || "";
 
-    const transcription = await createTranscription({ 
-      fileName: file.originalname, 
-      userId: user.uid, 
+    const transcription = await createTranscription({
+      fileName: file.originalname,
+      userId: user.uid,
       duration,
       extension,
     });
 
-    // Cria log de uso (inicialmente como pending)
     const usageLog = await createUsageLog({
       userId: user.uid,
       transcriptionId: transcription.id,
       duration,
-      status: "pending",
+      status: UsageStatus.PENDING,
     });
 
     res.status(202).json(transcription);
 
-    // processamento assíncrono da transcrição
-    try {
-      
-      // Converte vídeo para áudio
-      const audioPath = await convertVideoToAudio(file.path);
+    // Processamento assíncrono da transcrição
+    processTranscriptionAsync(file.path, transcription.id, usageLog.id);
 
-      // Transcreve áudio
-      const transcriptText = await transcribeAudio(audioPath);
-
-      // Atualiza o status do transcription para "done"
-      await db.collection("transcriptions").doc(transcription.id).update({
-        status: TranscriptionStatus.DONE,
-        transcript: transcriptText,
-        finishedAt: new Date(),
-      });
-
-      // Marca o log como concluído
-      await updateUsageLogStatus(usageLog.id, "done");
-
-      // remove arquivos temporários
-      fs.unlinkSync(file.path);
-      fs.unlinkSync(audioPath);
-
-    } catch (err) {
-      await db.collection("transcriptions").doc(transcription.id).update({
-        status: TranscriptionStatus.ERROR,
-        error: (err as Error).message,
-      });
-    }
   } catch (err) {
-    console.error("Erro ao criar transcrição:", err);
+    console.error(err);
     res.status(500).json({ error: "Erro ao processar vídeo" });
   }
 }
@@ -81,7 +54,7 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 // Listar transcrições do usuário
 export const listTranscriptions = async (req: any, res: Response) => {
   try {
-    const transcriptions = await listTranscriptionsByUser(req.user.uid);
+    const transcriptions = await getTranscriptionsByUser(req.user.uid);
     res.json(transcriptions);
   } catch (err) {
     console.error(err);

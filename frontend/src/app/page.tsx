@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { auth } from "../../lib/firebase";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import toast, { Toaster } from "react-hot-toast";
-import { AiOutlinePlus, AiOutlineEye, AiOutlineDelete } from "react-icons/ai";
+import { AiOutlinePlus, AiOutlineEye, AiOutlineDelete, AiOutlineQuestionCircle } from "react-icons/ai";
 import { useRouter } from "next/navigation";
 import TranscriptionModal from "@/components/TranscriptionModal";
 import { Transcription } from "@/types/Transcription";
@@ -51,10 +51,27 @@ export default function HomePage() {
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
 
-  const [quota] = useState({ used: 3, limit: 5, mb: 120, minutes: 45 });
+  const [quota, setQuota] = useState({ used: 0, limit: 0, remaining: 0, plan: "Free" });
 
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null);
+
+  const fetchQuota = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Usuário não autenticado");
+
+      const token = await user.getIdToken();
+      const res = await fetch("http://localhost:8080/api/user/quota", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Falha ao buscar cota");
+      const data = await res.json();
+      setQuota(data);
+    } catch (err: any) {
+      toast.error("Erro ao buscar cota: " + err.message);
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -73,6 +90,9 @@ export default function HomePage() {
         if (!res.ok) throw new Error("Falha ao buscar transcrições");
         const data = await res.json();
         setTranscriptions(data);
+
+        // Buscar cota
+        await fetchQuota();
       } catch (err: any) {
         setError(err.message);
       } finally {
@@ -93,6 +113,14 @@ export default function HomePage() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return;
     const file = e.target.files[0];
+
+    // Bloquear upload se cota atingida
+    if (quota.used >= quota.limit) {
+      toast.error("Você atingiu o limite diário de minutos transcritos.");
+      e.target.value = "";
+      return;
+    }
+
     setUploading(true);
 
     try {
@@ -109,11 +137,17 @@ export default function HomePage() {
         body: formData,
       });
 
-      if (!res.ok) throw new Error("Falha ao enviar vídeo");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Falha ao enviar vídeo");
+      }
 
       const newTranscription = await res.json();
       setTranscriptions((prev) => [newTranscription, ...prev]);
       toast.success("Vídeo enviado com sucesso!");
+
+      // Atualiza cota após upload
+      await fetchQuota();
     } catch (err: any) {
       toast.error("Erro: " + err.message);
     } finally {
@@ -123,22 +157,7 @@ export default function HomePage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Deseja realmente excluir esta transcrição?")) return;
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("Usuário não autenticado");
-
-      const token = await user.getIdToken();
-      const res = await fetch(`http://localhost:8080/api/transcription/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Falha ao excluir transcrição");
-      setTranscriptions((prev) => prev.filter((t) => t.id !== id));
-      toast.success("Transcrição excluída!");
-    } catch (err: any) {
-      toast.error(err.message);
-    }
+    //
   };
 
   // Função para abrir modal
@@ -173,12 +192,14 @@ export default function HomePage() {
           {/* Badge de cotas */}
           <div className="relative group cursor-pointer">
             <span className="bg-gray-200 text-gray-800 px-3 py-1 rounded-full text-sm">
-              {quota.used}/{quota.limit} uploads hoje
+              {/* {quota.used}/{quota.limit} minutos diários */}
+              Plano {quota.plan} <AiOutlineQuestionCircle className="inline mb-1" size={16}/>
             </span>
-            <div className="absolute right-0 mt-2 w-56 bg-white border rounded-lg shadow-lg p-4 hidden group-hover:block">
-              <p><strong>Uploads:</strong> {quota.used}/{quota.limit}</p>
-              <p><strong>MBs usados:</strong> {quota.mb} MB</p>
-              <p><strong>Minutos transcritos:</strong> {quota.minutes} min</p>
+            <div className="absolute right-0 mt-2 w-56 text-sm bg-white border rounded-lg shadow-lg px-4 py-2 hidden group-hover:block">
+              {/* <p><strong>Plano:</strong> {quota.plan}</p> */}
+              <p><strong>Limite diário:</strong> {quota.limit}</p>
+              <p><strong>Minutos usados:</strong> {quota.used}</p>
+              <p><strong>Minutos restantes:</strong> {quota.remaining}</p>
             </div>
           </div>
 
@@ -230,7 +251,7 @@ export default function HomePage() {
             <button
               key={f.key}
               onClick={() => setFilter(f.key as Filter)}
-              className={`px-3 py-1 rounded-full text-sm ${filter === f.key
+              className={`px-3 py-1 rounded-full text-xs ${filter === f.key
                 ? "bg-gray-900 text-white"
                 : "bg-gray-200 text-gray-700 hover:bg-gray-300"
                 }`}

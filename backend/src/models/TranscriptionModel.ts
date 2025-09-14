@@ -22,21 +22,12 @@ export interface Transcription {
 
 const collectionRef = db.collection("transcriptions");
 
-export const createTranscription = async (data: {
-  fileName: string;
-  userId: string;
-  extension: string;
-  duration: number;
-}): Promise<Transcription> => {
+export const createTranscription = async (data: Omit<Transcription, "id" | "status" | "createdAt">): Promise<Transcription> => {
   const docRef = await collectionRef.add({
-    fileName: data.fileName,
-    userId: data.userId,
-    extension: data.extension,
-    duration: data.duration,
+    ...data,
     status: TranscriptionStatus.PENDING,
     createdAt: new Date(),
   });
-
   const snapshot = await docRef.get();
   return { id: snapshot.id, ...snapshot.data() } as Transcription;
 };
@@ -59,7 +50,45 @@ export const updateTranscriptionText = async (id: string, transcript: string): P
   return { id: updated.id, ...updated.data() } as Transcription;
 };
 
-export const listTranscriptionsByUser = async (userId: string): Promise<Transcription[]> => {
+export const markTranscriptionDone = async (
+  id: string,
+  transcript?: string
+): Promise<Transcription | null> => {
+  const docRef = collectionRef.doc(id);
+  const snapshot = await docRef.get();
+  if (!snapshot.exists) return null;
+
+  const updateData: any = {
+    status: TranscriptionStatus.DONE,
+    finishedAt: new Date(),
+    updatedAt: new Date(),
+  };
+  if (transcript) updateData.transcript = transcript;
+
+  await docRef.update(updateData);
+  const updated = await docRef.get();
+  return { id: updated.id, ...updated.data() } as Transcription;
+};
+
+export const markTranscriptionError = async (
+  id: string,
+  errorMessage: string
+): Promise<Transcription | null> => {
+  const docRef = collectionRef.doc(id);
+  const snapshot = await docRef.get();
+  if (!snapshot.exists) return null;
+
+  await docRef.update({
+    status: TranscriptionStatus.ERROR,
+    error: errorMessage,
+    updatedAt: new Date(),
+  });
+
+  const updated = await docRef.get();
+  return { id: updated.id, ...updated.data() } as Transcription;
+};
+
+export const getTranscriptionsByUser = async (userId: string): Promise<Transcription[]> => {
   const snapshot = await collectionRef
     .where("userId", "==", userId)
     .orderBy("createdAt", "desc")

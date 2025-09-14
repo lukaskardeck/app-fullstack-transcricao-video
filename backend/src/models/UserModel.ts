@@ -4,19 +4,22 @@ export interface User {
   id: string;
   email: string;
   name?: string;
-  plan: "free" | "pro";
+  plan: "Free" | "Pro";
   dailyLimitMinutes: number; // ex: free = 30, pro = 300
   createdAt: Date;
 }
 
 const collectionRef = db.collection("users");
 
+// Obtém usuário pelo ID
 export const getUserById = async (id: string): Promise<User | null> => {
   const doc = await collectionRef.doc(id).get();
   if (!doc.exists) return null;
   return { id: doc.id, ...doc.data() } as User;
 };
 
+
+// Cria usuário no firestore, se não existir
 export const createUserIfNotExists = async (id: string, email: string, name?: string): Promise<User> => {
   const user = await getUserById(id);
   if (user) return user;
@@ -24,11 +27,12 @@ export const createUserIfNotExists = async (id: string, email: string, name?: st
   const defaultUser: Omit<User, "id"> = {
     email,
     name,
-    plan: "free",
-    dailyLimitMinutes: 30, // limite inicial para free
+    plan: "Free",
+    dailyLimitMinutes: 30,
     createdAt: new Date(),
   };
 
   await collectionRef.doc(id).set(defaultUser);
   return { id, ...defaultUser };
 };
+
