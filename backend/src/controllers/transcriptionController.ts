@@ -3,7 +3,7 @@ import { db } from "../config/firebase";
 import { convertVideoToAudio } from "../services/ffmpegService";
 import { transcribeAudio } from "../services/openaiService";
 import fs from "fs";
-import { TranscriptionStatus } from "../enum/TranscriptionStatus";
+import { createTranscription, listTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
 
 
 // Solicitação de transcrição de vídeo
@@ -11,35 +11,21 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
   const user = (req as any).user;
   const file = req.file;
 
-  if (!file) {
-    return res.status(400).json({ error: "Arquivo não enviado" });
-  }
+  if (!file) return res.status(400).json({ error: "Arquivo não enviado" });
 
-  // cria registro inicial
-  const docRef = await db.collection("transcriptions").add({
-    userId: user.uid,
-    fileName: file.originalname,
-    status: TranscriptionStatus.PENDING,
-    createdAt: new Date(),
-  });
+  const transcription = await createTranscription({ fileName: file.originalname, userId: user.uid });
 
-  // resposta imediata ao cliente
-  res.status(202).json({
-    id: docRef.id,
-    fileName: file.originalname,
-    status: TranscriptionStatus.PENDING,
-    createdAt: new Date().toISOString(),
-  });
+  res.status(202).json(transcription);
 
   // processamento assíncrono
   try {
     const audioPath = await convertVideoToAudio(file.path);
 
-    const transcription = await transcribeAudio(audioPath);
+    const transcriptText = await transcribeAudio(audioPath);
 
-    await db.collection("transcriptions").doc(docRef.id).update({
+    await db.collection("transcriptions").doc(transcription.id).update({
       status: TranscriptionStatus.DONE,
-      transcript: transcription,
+      transcript: transcriptText,
       finishedAt: new Date(),
     });
 
@@ -47,7 +33,7 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
     fs.unlinkSync(file.path);
     fs.unlinkSync(audioPath);
   } catch (err) {
-    await db.collection("transcriptions").doc(docRef.id).update({
+    await db.collection("transcriptions").doc(transcription.id).update({
       status: TranscriptionStatus.ERROR,
       error: (err as Error).message,
     });
@@ -55,26 +41,14 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 }
 
 
-// Listar transcrições do usuário autenticado
+// Listar transcrições do usuário
 export const listTranscriptions = async (req: any, res: Response) => {
   try {
-    const userId = req.user.uid; // injetado pelo authMiddleware
-
-    const snapshot = await db
-      .collection("transcriptions")
-      .where("userId", "==", userId)
-      .orderBy("createdAt", "desc")
-      .get();
-
-    const transcriptions = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-
-    return res.json(transcriptions);
-  } catch (error) {
-    console.error("Erro ao listar transcrições:", error);
-    return res.status(500).json({ error: "Erro ao buscar transcrições" });
+    const transcriptions = await listTranscriptionsByUser(req.user.uid);
+    res.json(transcriptions);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao buscar transcrições" });
   }
 };
 
@@ -84,27 +58,14 @@ export const updateTranscription = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { transcript } = req.body;
+    if (!transcript) return res.status(400).json({ error: "Campo 'transcript' é obrigatório" });
 
-    if (!transcript) {
-      return res.status(400).json({ error: "Campo 'transcript' é obrigatório" });
-    }
+    const updated = await updateTranscriptionText(id, transcript);
+    if (!updated) return res.status(404).json({ error: "Transcrição não encontrada" });
 
-    const ref = db.collection("transcriptions").doc(id);
-    const doc = await ref.get();
-
-    if (!doc.exists) {
-      return res.status(404).json({ error: "Transcrição não encontrada" });
-    }
-
-    await ref.update({
-      transcript,
-      updatedAt: new Date(),
-    });
-
-    const updated = await ref.get();
-    return res.status(200).json({ id: updated.id, ...updated.data() });
-  } catch (err: any) {
-    console.error("Erro ao atualizar transcrição:", err);
-    return res.status(500).json({ error: "Erro interno no servidor" });
+    res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro interno no servidor" });
   }
 };
