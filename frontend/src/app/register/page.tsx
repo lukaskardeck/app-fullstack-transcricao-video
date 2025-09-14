@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 
 export default function CadastroPage() {
@@ -33,13 +33,29 @@ export default function CadastroPage() {
 
     try {
       setLoading(true);
+      
+      // cria usuário no Firebase Auth
       const userCred = await createUserWithEmailAndPassword(auth, email, password);
 
-      if (auth.currentUser && name) {
-        await updateProfile(auth.currentUser, { displayName: name });
-      }
+      const token = await userCred.user.getIdToken();
+      console.log("Token JWT:", token);
 
-      setMsg("✅ Conta criada com sucesso! Redirecionando...");
+      // registra usuário no backend
+      await fetch("http://localhost:8080/api/user/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ email, name }),
+      });
+
+
+      // if (auth.currentUser && name) {
+      //   await updateProfile(auth.currentUser, { displayName: name });
+      // }
+
+      setMsg("Conta criada com sucesso! Redirecionando...");
       setTimeout(() => router.push("/login"), 1500); // redireciona após 1.5s
     } catch (err: any) {
       setMsg("Erro: " + err.message);
