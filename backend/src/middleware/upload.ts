@@ -23,10 +23,12 @@ const storage = multer.diskStorage({
 });
 
 function fileFilter(req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) {
-  // aceita só .mp4
-  if (file.mimetype !== "video/mp4") {
-    return cb(new Error("Somente arquivos .mp4 são permitidos!"));
+  const allowedTypes = ["video/mp4", "audio/mpeg"]; // Aceita arquivos .mp4 e .mp3
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    return cb(new Error("Somente arquivos .mp4 e .mp3 são permitidos!"));
   }
+
   cb(null, true);
 }
 

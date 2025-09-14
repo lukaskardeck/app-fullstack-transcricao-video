@@ -129,7 +129,7 @@ export default function HomePage() {
 
       const token = await user.getIdToken();
       const formData = new FormData();
-      formData.append("video", file);
+      formData.append("file", file);
 
       const res = await fetch("http://localhost:8080/api/transcription", {
         method: "POST",
@@ -139,12 +139,12 @@ export default function HomePage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Falha ao enviar vídeo");
+        throw new Error(errorData.error || "Falha ao enviar arquivo");
       }
 
       const newTranscription = await res.json();
       setTranscriptions((prev) => [newTranscription, ...prev]);
-      toast.success("Vídeo enviado com sucesso!");
+      toast.success("Arquivo enviado com sucesso!");
 
       // Atualiza cota após upload
       await fetchQuota();
@@ -221,7 +221,7 @@ export default function HomePage() {
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Boas vindas ao Transcriber!</h2>
           <p className="text-gray-600">
-            Faça upload de seus vídeos e acompanhe o progresso das suas transcrições.
+            Faça upload de seus áudios e vídeos enquanto acompanha o progresso das suas transcrições.
           </p>
         </div>
 
@@ -232,7 +232,7 @@ export default function HomePage() {
             {uploading ? "Enviando..." : "Nova Transcrição"}
             <input
               type="file"
-              accept="video/*"
+              accept="video/*,audio/mpeg" // Aceita vídeo e áudio
               className="hidden"
               onChange={handleUpload}
               disabled={uploading}

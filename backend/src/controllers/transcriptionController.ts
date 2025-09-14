@@ -1,11 +1,8 @@
 import { Request, Response } from "express";
-import { db } from "../config/firebase";
-import { convertVideoToAudio, getVideoDuration } from "../services/ffmpegService";
-import { transcribeAudio } from "../services/openaiService";
-import fs from "fs";
+import { getMediaDuration } from "../services/ffmpegService";
 import { createTranscription, getTranscriptionById, getTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
 import { getUserById } from "../models/UserModel";
-import { createUsageLog, updateUsageLogStatus, UsageStatus } from "../models/UsageLogModel";
+import { createUsageLog, UsageStatus } from "../models/UsageLogModel";
 import { checkDailyQuota } from "../services/quotaService";
 import { processTranscriptionAsync } from "../services/transcriptionService";
 
@@ -19,14 +16,15 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
     const userData = await getUserById(user.uid);
     if (!userData) return res.status(404).json({ error: "Usuário não encontrado" });
 
-    const duration = await getVideoDuration(file.path);
+    const duration = await getMediaDuration(file.path);
+    
     const canUpload = await checkDailyQuota(user.uid, duration);
     if (!canUpload) return res.status(403).json({ error: "O arquivo excede o limite diário de upload" });
 
     const extension = file.originalname.split(".").pop() || "";
 
     const transcription = await createTranscription({
-      fileName: file.originalname,
+      fileName: file.originalname,  
       userId: user.uid,
       duration,
       extension,
@@ -42,7 +40,7 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
     res.status(202).json(transcription);
 
     // Processamento assíncrono da transcrição
-    processTranscriptionAsync(file.path, transcription.id, usageLog.id);
+    processTranscriptionAsync(file.path, extension, transcription.id, usageLog.id);
 
   } catch (err) {
     console.error(err);

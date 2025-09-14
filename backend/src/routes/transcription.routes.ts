@@ -11,7 +11,7 @@ import { upload } from "../middleware/upload";
 const router = Router();
 
 // POST /api/transcription
-router.post("/", verifyToken, upload.single("video"), createTranscriptionRequest);
+router.post("/", verifyToken, upload.single("file"), createTranscriptionRequest);
 
 // GET /api/transcription
 router.get("/", verifyToken, listTranscriptions);

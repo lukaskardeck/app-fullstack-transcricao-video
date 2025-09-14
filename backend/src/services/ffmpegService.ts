@@ -17,12 +17,13 @@ export function convertVideoToAudio(videoPath: string): Promise<string> {
   });
 }
 
-export async function getVideoDuration(filePath: string): Promise<number> {
+export async function getMediaDuration(filePath: string): Promise<number> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) return reject(err);
       const duration = metadata.format.duration || 0;
-      resolve(Math.floor(duration)); // segundos inteiros
+      if (!duration) return reject(new Error("Não foi possível obter a duração do arquivo"));
+      resolve(Math.floor(duration)); // retorna em segundos
     });
   });
 }

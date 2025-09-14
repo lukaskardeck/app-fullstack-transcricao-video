@@ -6,14 +6,21 @@ import fs from "fs";
 
 export const processTranscriptionAsync = async (
   filePath: string,
+  extension: string,
   transcriptionId: string,
   usageLogId: string
 ) => {
+
   let audioPath: string | undefined;
 
   try {
-    // Converte vídeo para áudio
-    audioPath = await convertVideoToAudio(filePath);
+    if (extension === "mp3") {
+      // já é áudio, não precisa converter
+      audioPath = filePath;
+    } else {
+      // converter vídeo para áudio
+      audioPath = await convertVideoToAudio(filePath);
+    }
 
     // Realiza a transcrição do áudio
     const transcriptText = await transcribeAudio(audioPath);
@@ -34,8 +41,13 @@ export const processTranscriptionAsync = async (
     await updateUsageLogStatus(usageLogId, UsageStatus.ERROR);
 
   } finally {
-    // Limpa arquivos temporários
-    fs.unlinkSync(filePath);
-    if (audioPath) fs.unlinkSync(audioPath);
+    // Se for mp3, não apagar o arquivo original (filePath === audioPath)
+    if (filePath !== audioPath) {
+      fs.unlinkSync(filePath);
+    }
+    // Apagar o arquivo de áudio temporário se foi criado
+    if (audioPath && audioPath !== filePath) {
+      fs.unlinkSync(audioPath);
+    }
   }
 };
