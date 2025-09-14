@@ -4,6 +4,8 @@ import { convertVideoToAudio, getVideoDuration } from "../services/ffmpegService
 import { transcribeAudio } from "../services/openaiService";
 import fs from "fs";
 import { createTranscription, getTranscriptionById, listTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
+import { getUserById } from "../models/User";
+import { createUsageLog, updateUsageLogStatus } from "../models/UsageLog";
 
 // Solicitação de transcrição de vídeo
 export async function createTranscriptionRequest(req: Request, res: Response) {
@@ -13,6 +15,10 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
   if (!file) return res.status(400).json({ error: "Arquivo não enviado" });
 
   try {
+    // Verifica se o usuário existe no banco de dados
+    const userData = await getUserById(user.uid);
+    if (!userData) return res.status(404).json({ error: "Usuário não encontrado" });
+  
     // Obtém a duração do arquivo em segundos
     const duration = await getVideoDuration(file.path);
 
@@ -26,23 +32,39 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
       extension,
     });
 
+    // Cria log de uso (inicialmente como pending)
+    const usageLog = await createUsageLog({
+      userId: user.uid,
+      transcriptionId: transcription.id,
+      duration,
+      status: "pending",
+    });
+
     res.status(202).json(transcription);
 
-    // processamento assíncrono
+    // processamento assíncrono da transcrição
     try {
+      
+      // Converte vídeo para áudio
       const audioPath = await convertVideoToAudio(file.path);
 
+      // Transcreve áudio
       const transcriptText = await transcribeAudio(audioPath);
 
+      // Atualiza o status do transcription para "done"
       await db.collection("transcriptions").doc(transcription.id).update({
         status: TranscriptionStatus.DONE,
         transcript: transcriptText,
         finishedAt: new Date(),
       });
 
+      // Marca o log como concluído
+      await updateUsageLogStatus(usageLog.id, "done");
+
       // remove arquivos temporários
       fs.unlinkSync(file.path);
       fs.unlinkSync(audioPath);
+
     } catch (err) {
       await db.collection("transcriptions").doc(transcription.id).update({
         status: TranscriptionStatus.ERROR,
