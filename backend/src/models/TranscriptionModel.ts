@@ -9,6 +9,8 @@ export enum TranscriptionStatus {
 export interface Transcription {
   id: string;
   fileName: string;
+  extension: string;
+  duration: number;
   transcript?: string;
   status: TranscriptionStatus;
   userId: string;
@@ -23,10 +25,14 @@ const collectionRef = db.collection("transcriptions");
 export const createTranscription = async (data: {
   fileName: string;
   userId: string;
+  extension: string;
+  duration: number;
 }): Promise<Transcription> => {
   const docRef = await collectionRef.add({
     fileName: data.fileName,
     userId: data.userId,
+    extension: data.extension,
+    duration: data.duration,
     status: TranscriptionStatus.PENDING,
     createdAt: new Date(),
   });

@@ -1,6 +1,8 @@
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
+import ffprobePath from "ffprobe-static";
 
+ffmpeg.setFfprobePath(ffprobePath.path);
 ffmpeg.setFfmpegPath(ffmpegPath!);
 
 export function convertVideoToAudio(videoPath: string): Promise<string> {
@@ -12,5 +14,15 @@ export function convertVideoToAudio(videoPath: string): Promise<string> {
       .on("end", () => resolve(outputPath))
       .on("error", (err) => reject(err))
       .save(outputPath);
+  });
+}
+
+export async function getVideoDuration(filePath: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err);
+      const duration = metadata.format.duration || 0;
+      resolve(Math.floor(duration)); // segundos inteiros
+    });
   });
 }

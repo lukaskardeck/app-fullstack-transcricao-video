@@ -13,23 +13,18 @@ import { TimestampFirebase } from "@/types/TimestampFirebase";
 type Filter = "all" | "pending" | "done" | "error";
 
 const formatFirestoreDate = (ts?: TimestampFirebase) => {
-  // console.log("Timestamp: " + ts?._nanoseconds);
   if (!ts?._seconds) return "--";
   const date = new Date(ts._seconds * 1000 + Math.floor(ts._nanoseconds / 1000000));
   return date.toLocaleString("pt-BR");
 };
 
-
-
 const formatDuration = (seconds?: number) => {
-  // if (seconds == null) return "--";
-  // const mins = Math.floor(seconds / 60)
-  //   .toString()
-  //   .padStart(2, "0");
-  // const secs = (seconds % 60).toString().padStart(2, "0");
-  // return `${mins}:${secs}`;
-
-  return "--";
+  if (seconds == null) return "--";
+  const mins = Math.floor(seconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const secs = (seconds % 60).toString().padStart(2, "0");
+  return `${mins}:${secs}`;
 };
 
 const StatusBadge = ({ status }: { status: string }) => {
@@ -255,7 +250,7 @@ export default function HomePage() {
               <p>Você ainda não fez nenhuma transcrição.</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300">
+                <table className="min-w-full border border-gray-300 text-sm">
                   <thead className="bg-gray-100">
                     <tr>
                       <th className="px-4 py-2 border-b text-left">Arquivo</th>

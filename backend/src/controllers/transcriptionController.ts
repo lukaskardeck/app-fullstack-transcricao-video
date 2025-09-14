@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
 import { db } from "../config/firebase";
-import { convertVideoToAudio } from "../services/ffmpegService";
+import { convertVideoToAudio, getVideoDuration } from "../services/ffmpegService";
 import { transcribeAudio } from "../services/openaiService";
 import fs from "fs";
 import { createTranscription, getTranscriptionById, listTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
-
 
 // Solicitação de transcrição de vídeo
 export async function createTranscriptionRequest(req: Request, res: Response) {
@@ -13,30 +12,46 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 
   if (!file) return res.status(400).json({ error: "Arquivo não enviado" });
 
-  const transcription = await createTranscription({ fileName: file.originalname, userId: user.uid });
-
-  res.status(202).json(transcription);
-
-  // processamento assíncrono
   try {
-    const audioPath = await convertVideoToAudio(file.path);
+    // Obtém a duração do arquivo em segundos
+    const duration = await getVideoDuration(file.path);
 
-    const transcriptText = await transcribeAudio(audioPath);
+    // Pega a extensão do arquivo (ex: .mp4, .mp3, etc.)
+    const extension = file.originalname.split('.').pop() || '';
 
-    await db.collection("transcriptions").doc(transcription.id).update({
-      status: TranscriptionStatus.DONE,
-      transcript: transcriptText,
-      finishedAt: new Date(),
+    const transcription = await createTranscription({ 
+      fileName: file.originalname, 
+      userId: user.uid, 
+      duration,
+      extension,
     });
 
-    // remove arquivos temporários
-    fs.unlinkSync(file.path);
-    fs.unlinkSync(audioPath);
+    res.status(202).json(transcription);
+
+    // processamento assíncrono
+    try {
+      const audioPath = await convertVideoToAudio(file.path);
+
+      const transcriptText = await transcribeAudio(audioPath);
+
+      await db.collection("transcriptions").doc(transcription.id).update({
+        status: TranscriptionStatus.DONE,
+        transcript: transcriptText,
+        finishedAt: new Date(),
+      });
+
+      // remove arquivos temporários
+      fs.unlinkSync(file.path);
+      fs.unlinkSync(audioPath);
+    } catch (err) {
+      await db.collection("transcriptions").doc(transcription.id).update({
+        status: TranscriptionStatus.ERROR,
+        error: (err as Error).message,
+      });
+    }
   } catch (err) {
-    await db.collection("transcriptions").doc(transcription.id).update({
-      status: TranscriptionStatus.ERROR,
-      error: (err as Error).message,
-    });
+    console.error("Erro ao criar transcrição:", err);
+    res.status(500).json({ error: "Erro ao processar vídeo" });
   }
 }
 
