@@ -41,13 +41,21 @@ export const processTranscriptionAsync = async (
     await updateUsageLogStatus(usageLogId, UsageStatus.ERROR);
 
   } finally {
-    // Se for mp3, não apagar o arquivo original (filePath === audioPath)
-    if (filePath !== audioPath) {
-      fs.unlinkSync(filePath);
-    }
-    // Apagar o arquivo de áudio temporário se foi criado
-    if (audioPath && audioPath !== filePath) {
-      fs.unlinkSync(audioPath);
+
+    // Cleanup dos arquivos
+    try {
+      if (extension === "mp3") {
+        // Para MP3, apagar apenas o arquivo original
+        fs.unlinkSync(filePath);
+      } else {
+        // Para vídeos, apagar tanto o original quanto o áudio convertido
+        fs.unlinkSync(filePath); // Remove o arquivo de vídeo original
+        if (audioPath && audioPath !== filePath) {
+          fs.unlinkSync(audioPath); // Remove o áudio temporário
+        }
+      }
+    } catch (cleanupError) {
+      console.error(`Erro ao limpar arquivos:`, cleanupError);
     }
   }
 };

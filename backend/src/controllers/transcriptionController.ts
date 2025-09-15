@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { getMediaDuration } from "../services/ffmpegService";
-import { createTranscription, getTranscriptionById, getTranscriptionsByUser, TranscriptionStatus, updateTranscriptionText } from "../models/TranscriptionModel";
+import { createTranscription, getTranscriptionById, getTranscriptionsByUser, updateTranscriptionText } from "../models/TranscriptionModel";
 import { getUserById } from "../models/UserModel";
 import { createUsageLog, UsageStatus } from "../models/UsageLogModel";
 import { checkDailyQuota } from "../services/quotaService";
 import { processTranscriptionAsync } from "../services/transcriptionService";
+import fs from "fs";
 
 // Upload de vídeo e criação da transcrição
 export async function createTranscriptionRequest(req: Request, res: Response) {
@@ -14,12 +15,18 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 
   try {
     const userData = await getUserById(user.uid);
-    if (!userData) return res.status(404).json({ error: "Usuário não encontrado" });
+    if (!userData) {
+      fs.unlinkSync(file.path);  // Remove o arquivo se o usuário não for encontrado
+      return res.status(404).json({ error: "Usuário não encontrado" });
+    }
 
     const duration = await getMediaDuration(file.path);
     
     const canUpload = await checkDailyQuota(user.uid, duration);
-    if (!canUpload) return res.status(403).json({ error: "O arquivo excede o limite diário de upload" });
+    if (!canUpload) {
+      fs.unlinkSync(file.path); // Remove o arquivo se exceder a cota diária
+      return res.status(403).json({ error: "O arquivo excede o limite diário de upload" });
+    }
 
     const extension = file.originalname.split(".").pop() || "";
 
@@ -44,7 +51,16 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Erro ao processar vídeo" });
+    
+    // Remove o arquivo em caso de erro
+    try {
+      fs.unlinkSync(file.path);
+      console.log(`Arquivo removido devido a erro: ${file.path}`);
+    } catch (unlinkError) {
+      console.error(`Erro ao remover arquivo após falha: ${unlinkError}`);
+    }
+    
+    res.status(500).json({ error: "Erro ao processar o arquivo" });
   }
 }
 
