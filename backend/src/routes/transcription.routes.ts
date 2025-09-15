@@ -3,6 +3,7 @@ import { verifyToken } from "../middleware/auth";
 import { 
     createTranscriptionRequest, 
     downloadTranscription, 
+    getTranscription, 
     listTranscriptions, 
     updateTranscription 
 } from "../controllers/transcriptionController";
@@ -15,6 +16,9 @@ router.post("/", verifyToken, upload.single("file"), createTranscriptionRequest)
 
 // GET /api/transcription
 router.get("/", verifyToken, listTranscriptions);
+
+// GET /api/transcription/:id
+router.get("/:id", verifyToken, getTranscription);
 
 // GET /api/transcription/download/:id
 router.get("/download/:id", verifyToken, downloadTranscription);

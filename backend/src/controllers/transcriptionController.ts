@@ -49,7 +49,27 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 }
 
 
-// Listar transcrições do usuário
+// Obter transcrição por ID
+export async function getTranscription(req: Request, res: Response) {
+  const user = (req as any).user;
+  const { id } = req.params;
+
+  try {
+    const transcription = await getTranscriptionById(id);
+
+    if (!transcription || transcription.userId !== user.uid) {
+      return res.status(404).json({ error: "Transcrição não encontrada" });
+    }
+
+    res.json(transcription);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao buscar transcrição" });
+  }
+}
+
+
+// Listar todas as transcrições do usuário
 export const listTranscriptions = async (req: any, res: Response) => {
   try {
     const transcriptions = await getTranscriptionsByUser(req.user.uid);

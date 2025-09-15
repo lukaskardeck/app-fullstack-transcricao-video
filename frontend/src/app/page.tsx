@@ -73,6 +73,38 @@ export default function HomePage() {
     }
   };
 
+
+  const pollTranscriptionStatus = (id: string) => {
+    const interval = setInterval(async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
+
+        const token = await user.getIdToken();
+        const res = await fetch(`http://localhost:8080/api/transcription/${id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) throw new Error("Falha ao buscar status");
+
+        const updated = await res.json();
+
+        setTranscriptions((prev) =>
+          prev.map((t) => (t.id === updated.id ? updated : t))
+        );
+
+        // Se não está mais "pending", para o polling
+        if (updated.status !== "pending") {
+          clearInterval(interval);
+        }
+      } catch (err) {
+        console.error("Erro no polling:", err);
+        clearInterval(interval); // evita loop infinito em caso de erro
+      }
+    }, 10000); // consulta a cada 10s
+  };
+
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -146,6 +178,9 @@ export default function HomePage() {
       setTranscriptions((prev) => [newTranscription, ...prev]);
       toast.success("Arquivo enviado com sucesso!");
 
+      // Inicia o polling para acompanhar essa transcrição
+      pollTranscriptionStatus(newTranscription.id);
+
       // Atualiza cota após upload
       await fetchQuota();
     } catch (err: any) {
@@ -192,11 +227,9 @@ export default function HomePage() {
           {/* Badge de cotas */}
           <div className="relative group cursor-pointer">
             <span className="bg-gray-200 text-gray-800 px-3 py-1 rounded-full text-sm">
-              {/* {quota.used}/{quota.limit} minutos diários */}
-              Plano {quota.plan} <AiOutlineQuestionCircle className="inline mb-1" size={16}/>
+              Plano {quota.plan} <AiOutlineQuestionCircle className="inline mb-1" size={16} />
             </span>
             <div className="absolute right-0 mt-2 w-56 text-sm bg-white border rounded-lg shadow-lg px-4 py-2 hidden group-hover:block">
-              {/* <p><strong>Plano:</strong> {quota.plan}</p> */}
               <p><strong>Limite diário:</strong> {quota.limit}</p>
               <p><strong>Minutos usados:</strong> {quota.used}</p>
               <p><strong>Minutos restantes:</strong> {quota.remaining}</p>
