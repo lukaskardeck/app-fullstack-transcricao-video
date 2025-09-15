@@ -28,7 +28,7 @@ export const createUserIfNotExists = async (id: string, email: string, name?: st
     email,
     name,
     plan: "Free",
-    dailyLimitMinutes: 30,
+    dailyLimitMinutes: 20,
     createdAt: new Date(),
   };
 
