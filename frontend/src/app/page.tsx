@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
-import { useRouter } from "next/navigation";
 import TranscriptionModal from "@/components/TranscriptionModal";
 import { Transcription } from "@/types/Transcription";
 import Header from "@/components/Header";
@@ -10,21 +9,18 @@ import FilterBar, { Filter } from "@/components/FilterBar";
 import TranscriptionTable from "@/components/TranscriptionTable";
 import UploadButton from "@/components/UploadButton";
 import WelcomeSection from "@/components/WelcomeSection";
-import LoadingScreen from "@/components/LoadingScreen";
-
-// Hooks customizados
 import { useQuota } from "@/hooks/useQuota";
 import { useTranscriptions } from "@/hooks/useTranscriptions";
-import { useAuth } from "@/hooks/useAuth";
+import { withAuth } from "@/components/WithAuth";
+import { auth } from "../../lib/firebase";
 
-export default function HomePage() {
-  const router = useRouter();
+function HomePage() {
+  const user = auth.currentUser!;
+  
   const [filter, setFilter] = useState<Filter>("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null);
 
-  // Hooks customizados
-  const { user, loading: authLoading, loggingOut, handleLogout } = useAuth(router);
   const { quota, fetchQuota } = useQuota(user);
   const { 
     transcriptions, 
@@ -33,16 +29,13 @@ export default function HomePage() {
     uploading,
     handleUpload: baseHandleUpload,
     handleDelete: baseHandleDelete 
-  } = useTranscriptions(user, authLoading, fetchQuota);
+  } = useTranscriptions(user, false, fetchQuota); // authLoading sempre false aqui
 
-  // Buscar quota quando usuário estiver disponível
+  // Buscar quota quando componente monta
   useEffect(() => {
-    if (user && !authLoading) {
-      fetchQuota();
-    }
-  }, [user, authLoading]);
+    fetchQuota();
+  }, []);
 
-  // Wrapper para handleUpload que verifica quota
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (quota.used >= quota.limit) {
       toast.error("Você atingiu o limite diário de minutos transcritos.");
@@ -51,7 +44,11 @@ export default function HomePage() {
     }
     
     await baseHandleUpload(e);
-    await fetchQuota(); // Atualiza quota após upload
+    await fetchQuota();
+  };
+
+  const handleLogout = async () => {
+    await auth.signOut();
   };
 
   const openModal = (transcription: Transcription) => {
@@ -64,21 +61,13 @@ export default function HomePage() {
       ? transcriptions 
       : transcriptions.filter(t => t.status === filter);
 
-  if (loggingOut) {
-    return <LoadingScreen message="Saindo..." subMessage="Você será redirecionado para a tela de login." />;
-  }
-
-  if (authLoading) {
-    return <LoadingScreen message="Carregando..." />;
-  }
-
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900">
       <Toaster position="bottom-right" />
       
       <Header 
         quota={quota} 
-        userEmail={user?.email || null} 
+        userEmail={user.email} 
         onLogout={handleLogout} 
       />
 
@@ -141,3 +130,6 @@ function TranscriptionsContent({
     />
   );
 }
+
+// Exporta a HomePage protegida
+export default withAuth(HomePage);
