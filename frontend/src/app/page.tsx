@@ -1,361 +1,105 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { auth } from "../../lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
 import toast, { Toaster } from "react-hot-toast";
-import { AiOutlinePlus, AiOutlineEye, AiOutlineDelete, AiOutlineQuestionCircle } from "react-icons/ai";
 import { useRouter } from "next/navigation";
 import TranscriptionModal from "@/components/TranscriptionModal";
 import { Transcription } from "@/types/Transcription";
-import { TimestampFirebase } from "@/types/TimestampFirebase";
+import Header from "@/components/Header";
+import FilterBar, { Filter } from "@/components/FilterBar";
+import TranscriptionTable from "@/components/TranscriptionTable";
+import UploadButton from "@/components/UploadButton";
+import WelcomeSection from "@/components/WelcomeSection";
+import LoadingScreen from "@/components/LoadingScreen";
 
-type Filter = "all" | "pending" | "done" | "error";
-
-const formatFirestoreDate = (ts?: TimestampFirebase) => {
-  if (!ts?._seconds) return "--";
-  const date = new Date(ts._seconds * 1000 + Math.floor(ts._nanoseconds / 1000000));
-  return date.toLocaleString("pt-BR");
-};
-
-const formatDuration = (seconds?: number) => {
-  if (seconds == null) return "--";
-  const mins = Math.floor(seconds / 60)
-    .toString()
-    .padStart(2, "0");
-  const secs = (seconds % 60).toString().padStart(2, "0");
-  return `${mins}:${secs}`;
-};
-
-const StatusBadge = ({ status }: { status: string }) => {
-  const map: Record<string, { text: string; bg: string; color: string }> = {
-    pending: { text: "Em processamento", bg: "bg-yellow-100", color: "text-yellow-800" },
-    done: { text: "Concluído", bg: "bg-green-100", color: "text-green-800" },
-    error: { text: "Erro", bg: "bg-red-100", color: "text-red-800" },
-  };
-  const s = map[status] || { text: status, bg: "bg-gray-200", color: "text-gray-800" };
-  return (
-    <div className={`${s.bg} ${s.color} w-max px-2 py-1 rounded-full text-sm font-medium`}>
-      {s.text}
-    </div>
-  );
-};
+// Hooks customizados
+import { useQuota } from "@/hooks/useQuota";
+import { useTranscriptions } from "@/hooks/useTranscriptions";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function HomePage() {
-  const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
-
-  const [quota, setQuota] = useState({ used: 0, limit: 0, remaining: 0, plan: "Free" });
-
+  const [filter, setFilter] = useState<Filter>("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null);
 
-  const fetchQuota = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("Usuário não autenticado");
+  // Hooks customizados
+  const { user, loading: authLoading, loggingOut, handleLogout } = useAuth(router);
+  const { quota, fetchQuota } = useQuota(user);
+  const { 
+    transcriptions, 
+    loading: transcriptionsLoading, 
+    error, 
+    uploading,
+    handleUpload: baseHandleUpload,
+    handleDelete: baseHandleDelete 
+  } = useTranscriptions(user, authLoading, fetchQuota);
 
-      const token = await user.getIdToken();
-      const res = await fetch("http://localhost:8080/api/user/quota", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error("Falha ao buscar cota");
-      const data = await res.json();
-      setQuota(data);
-    } catch (err: any) {
-      toast.error("Erro ao buscar cota: " + err.message);
-    }
-  };
-
-
-  const pollTranscriptionStatus = (id: string) => {
-    const interval = setInterval(async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const token = await user.getIdToken();
-        const res = await fetch(`http://localhost:8080/api/transcription/${id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-
-        if (!res.ok) throw new Error("Falha ao buscar status");
-
-        const updated = await res.json();
-
-        setTranscriptions((prev) =>
-          prev.map((t) => (t.id === updated.id ? updated : t))
-        );
-
-        // Se não está mais "pending", para o polling
-        if (updated.status !== "pending") {
-          clearInterval(interval);
-        }
-      } catch (err) {
-        console.error("Erro no polling:", err);
-        clearInterval(interval); // evita loop infinito em caso de erro
-      }
-    }, 10000); // consulta a cada 10s
-  };
-
-
+  // Buscar quota quando usuário estiver disponível
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        setError("Usuário não autenticado.");
-        setLoading(false);
-        return;
-      }
-      setUserEmail(user.email);
+    if (user && !authLoading) {
+      fetchQuota();
+    }
+  }, [user, authLoading]);
 
-      try {
-        const token = await user.getIdToken();
-        const res = await fetch("http://localhost:8080/api/transcription", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error("Falha ao buscar transcrições");
-        const data = await res.json();
-        setTranscriptions(data);
-
-        // Buscar cota
-        await fetchQuota();
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    await signOut(auth);
-    setTimeout(() => {
-      router.push("/login"); // redireciona após 1s
-    }, 1000);
-  };
-
+  // Wrapper para handleUpload que verifica quota
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.length) return;
-    const file = e.target.files[0];
-
-    // Bloquear upload se cota atingida
     if (quota.used >= quota.limit) {
       toast.error("Você atingiu o limite diário de minutos transcritos.");
       e.target.value = "";
       return;
     }
-
-    setUploading(true);
-
-    try {
-      const user = auth.currentUser;
-      if (!user) throw new Error("Usuário não autenticado");
-
-      const token = await user.getIdToken();
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("http://localhost:8080/api/transcription", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || "Falha ao enviar arquivo");
-      }
-
-      const newTranscription = await res.json();
-      setTranscriptions((prev) => [newTranscription, ...prev]);
-      toast.success("Arquivo enviado com sucesso!");
-
-      // Inicia o polling para acompanhar essa transcrição
-      pollTranscriptionStatus(newTranscription.id);
-
-      // Atualiza cota após upload
-      await fetchQuota();
-    } catch (err: any) {
-      toast.error("Erro: " + err.message);
-    } finally {
-      setUploading(false);
-      e.target.value = "";
-    }
+    
+    await baseHandleUpload(e);
+    await fetchQuota(); // Atualiza quota após upload
   };
 
-  const handleDelete = async (id: string) => {
-    //
-  };
-
-  // Função para abrir modal
-  const openModal = (t: Transcription) => {
-    setSelectedTranscription(t);
+  const openModal = (transcription: Transcription) => {
+    setSelectedTranscription(transcription);
     setModalOpen(true);
   };
 
-
-  const filteredTranscriptions =
-    filter === "all"
-      ? transcriptions
-      : transcriptions.filter((t) => t.status === filter);
+  const filteredTranscriptions = 
+    filter === "all" 
+      ? transcriptions 
+      : transcriptions.filter(t => t.status === filter);
 
   if (loggingOut) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-white text-gray-900 flex-col">
-        <p className="text-xl font-bold mb-2">Saindo...</p>
-        <p>Você será redirecionado para a tela de login.</p>
-      </div>
-    );
+    return <LoadingScreen message="Saindo..." subMessage="Você será redirecionado para a tela de login." />;
+  }
+
+  if (authLoading) {
+    return <LoadingScreen message="Carregando..." />;
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-gray-900">
       <Toaster position="bottom-right" />
+      
+      <Header 
+        quota={quota} 
+        userEmail={user?.email || null} 
+        onLogout={handleLogout} 
+      />
 
-      {/* HEADER */}
-      <header className="flex justify-between items-center px-6 py-4 bg-white shadow">
-        <h1 className="text-xl font-bold">Transcriber</h1>
-        <div className="flex items-center space-x-6">
-          {/* Badge de cotas */}
-          <div className="relative group cursor-pointer">
-            <span className="bg-gray-200 text-gray-800 px-3 py-1 rounded-full text-sm">
-              Plano {quota.plan} <AiOutlineQuestionCircle className="inline mb-1" size={16} />
-            </span>
-            <div className="absolute right-0 mt-2 w-56 text-sm bg-white border rounded-lg shadow-lg px-4 py-2 hidden group-hover:block">
-              <p><strong>Limite diário:</strong> {quota.limit}</p>
-              <p><strong>Minutos usados:</strong> {quota.used}</p>
-              <p><strong>Minutos restantes:</strong> {quota.remaining}</p>
-            </div>
-          </div>
-
-          {/* Email + logout */}
-          <div className="flex items-center space-x-3">
-            <span className="text-sm">{userEmail}</span>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1 bg-gray-800 text-white rounded hover:bg-gray-900 text-sm cursor-pointer"
-            >
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* MAIN */}
       <main className="flex-1 max-w-6xl mx-auto p-6 w-full">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Boas vindas ao Transcriber!</h2>
-          <p className="text-gray-600">
-            Faça upload de seus áudios e vídeos enquanto acompanha o progresso das suas transcrições.
-          </p>
-        </div>
+        <WelcomeSection />
+        
+        <UploadButton 
+          uploading={uploading}
+          onUpload={handleUpload}
+        />
 
-        {/* Upload */}
-        <div className="mb-6">
-          <label className="bg-gray-800 text-white px-4 py-2 rounded shadow cursor-pointer hover:bg-gray-900 flex items-center gap-2 w-max">
-            <AiOutlinePlus />
-            {uploading ? "Enviando..." : "Nova Transcrição"}
-            <input
-              type="file"
-              accept="video/*,audio/mpeg" // Aceita vídeo e áudio
-              className="hidden"
-              onChange={handleUpload}
-              disabled={uploading}
-            />
-          </label>
-        </div>
+        <FilterBar filter={filter} setFilter={setFilter} />
 
-        {/* Filtros */}
-        <div className="flex space-x-2 mb-4">
-          {[
-            { key: "all", label: "Todos" },
-            { key: "pending", label: "Em processamento" },
-            { key: "done", label: "Concluídos" },
-            { key: "error", label: "Erros" },
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key as Filter)}
-              className={`px-3 py-1 rounded-full text-xs ${filter === f.key
-                ? "bg-gray-900 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+        <TranscriptionsContent
+          loading={transcriptionsLoading}
+          error={error}
+          transcriptions={filteredTranscriptions}
+          onOpen={openModal}
+          onDelete={baseHandleDelete}
+        />
 
-        {/* Lista em tabela */}
-        {loading && <p>Carregando...</p>}
-        {error && <p className="text-red-500">Erro: {error}</p>}
-
-        {!loading && !error && (
-          <>
-            {filteredTranscriptions.length === 0 ? (
-              <p>Você ainda não fez nenhuma transcrição.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full border border-gray-300 text-sm">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-2 border-b text-left">Arquivo</th>
-                      <th className="px-4 py-2 border-b text-left">Duração</th>
-                      <th className="px-4 py-2 border-b text-left">Upload</th>
-                      <th className="px-4 py-2 border-b text-left">Concluído</th>
-                      <th className="px-4 py-2 border-b text-left">Status</th>
-                      <th className="px-4 py-2 border-b text-left">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredTranscriptions.map((t) => (
-                      <tr key={t.id} className="bg-white hover:bg-gray-50">
-                        <td className="px-4 py-2 border-b">{t.fileName}</td>
-                        <td className="px-4 py-2 border-b">{formatDuration(t.duration)}</td>
-                        <td className="px-4 py-2 border-b">{formatFirestoreDate(t.createdAt)}</td>
-                        <td className="px-4 py-2 border-b">{formatFirestoreDate(t.finishedAt)}</td>
-
-                        <td className="px-4 py-2 border-b">
-                          <StatusBadge status={t.status} />
-                        </td>
-                        <td className="px-4 py-2 border-b gap-2">
-                          <div className="flex items-center gap-2">
-                            {t.status === "done" && (
-                              <button
-                                onClick={() => openModal(t)}
-                                className="text-gray-800 hover:text-gray-600 cursor-pointer"
-                                title="Ver transcrição"
-                              >
-                                <AiOutlineEye size={20} />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleDelete(t.id)}
-                              className="text-red-600 hover:text-red-800 cursor-pointer"
-                              title="Excluir transcrição"
-                            >
-                              <AiOutlineDelete size={20} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Modal de transcrição */}
         <TranscriptionModal
           transcription={selectedTranscription}
           open={modalOpen}
@@ -363,5 +107,37 @@ export default function HomePage() {
         />
       </main>
     </div>
+  );
+}
+
+// Componente para o conteúdo das transcrições
+interface TranscriptionsContentProps {
+  loading: boolean;
+  error: string | null;
+  transcriptions: Transcription[];
+  onOpen: (transcription: Transcription) => void;
+  onDelete: (id: string) => void;
+}
+
+function TranscriptionsContent({ 
+  loading, 
+  error, 
+  transcriptions, 
+  onOpen, 
+  onDelete 
+}: TranscriptionsContentProps) {
+  if (loading) return <p>Carregando...</p>;
+  if (error) return <p className="text-red-500">Erro: {error}</p>;
+  
+  if (transcriptions.length === 0) {
+    return <p>Você ainda não fez nenhuma transcrição.</p>;
+  }
+
+  return (
+    <TranscriptionTable
+      transcriptions={transcriptions}
+      onOpen={onOpen}
+      onDelete={onDelete}
+    />
   );
 }
