@@ -16,22 +16,27 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
   try {
     const userData = await getUserById(user.uid);
     if (!userData) {
-      fs.unlinkSync(file.path);  // Remove o arquivo se o usuário não for encontrado
+      fs.unlinkSync(file.path);
       return res.status(404).json({ error: "Usuário não encontrado" });
     }
 
     const duration = await getMediaDuration(file.path);
-    
+
     const canUpload = await checkDailyQuota(user.uid, duration);
     if (!canUpload) {
-      fs.unlinkSync(file.path); // Remove o arquivo se exceder a cota diária
+      fs.unlinkSync(file.path);
       return res.status(403).json({ error: "O arquivo excede o limite diário de upload" });
     }
 
-    const extension = file.originalname.split(".").pop() || "";
+    const extension = file.originalname.split(".").pop()?.toLowerCase() || "";
+
+    if (!["mp3", "mp4"].includes(extension)) {
+      fs.unlinkSync(file.path);
+      return res.status(400).json({ error: "Somente arquivos MP3 ou MP4 são suportados." });
+    }
 
     const transcription = await createTranscription({
-      fileName: file.originalname,  
+      fileName: file.originalname,
       userId: user.uid,
       duration,
       extension,
@@ -46,20 +51,16 @@ export async function createTranscriptionRequest(req: Request, res: Response) {
 
     res.status(202).json(transcription);
 
-    // Processamento assíncrono da transcrição
+    // processamento assíncrono da transcrição
     processTranscriptionAsync(file.path, extension, transcription.id, usageLog.id);
 
   } catch (err) {
-    console.error(err);
-    
-    // Remove o arquivo em caso de erro
     try {
       fs.unlinkSync(file.path);
-      console.log(`Arquivo removido devido a erro: ${file.path}`);
     } catch (unlinkError) {
-      console.error(`Erro ao remover arquivo após falha: ${unlinkError}`);
+      console.warn("Erro ao remover arquivo após falha:", unlinkError);
     }
-    
+
     res.status(500).json({ error: "Erro ao processar o arquivo" });
   }
 }
@@ -113,6 +114,7 @@ export const updateTranscription = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Erro interno no servidor" });
   }
 };
+
 
 // Download da transcrição
 export const downloadTranscription = async (req: Request, res: Response) => {

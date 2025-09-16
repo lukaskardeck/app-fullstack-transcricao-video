@@ -7,12 +7,12 @@ import {
     listTranscriptions, 
     updateTranscription 
 } from "../controllers/transcriptionController";
-import { upload } from "../middleware/upload";
+import { uploadMiddleware } from "../middleware/uploadMiddleware";
 
 const router = Router();
 
 // POST /api/transcription
-router.post("/", verifyToken, upload.single("file"), createTranscriptionRequest);
+router.post("/", verifyToken, uploadMiddleware, createTranscriptionRequest);
 
 // GET /api/transcription
 router.get("/", verifyToken, listTranscriptions);
