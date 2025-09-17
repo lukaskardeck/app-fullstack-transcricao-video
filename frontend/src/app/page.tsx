@@ -14,6 +14,8 @@ import { useTranscriptions } from "@/hooks/useTranscriptions";
 import { withAuth } from "@/components/WithAuth";
 import { auth } from "../../lib/firebase";
 import InfoCard from "@/components/InfoCard";
+import ConfirmUploadModal from "@/components/ConfirmUploadModal";
+import { formatDuration, getFileDuration } from "@/utils/format";
 
 function HomePage() {
   const user = auth.currentUser!;
@@ -21,6 +23,10 @@ function HomePage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [transcriptionModalOpen, setTranscriptionModalOpen] = useState(false);
   const [selectedTranscription, setSelectedTranscription] = useState<Transcription | null>(null);
+
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { quota, fetchQuota } = useQuota(user);
   const {
@@ -30,9 +36,8 @@ function HomePage() {
     uploading,
     handleUpload: baseHandleUpload,
     handleDelete: baseHandleDelete
-  } = useTranscriptions(user, false, fetchQuota); // authLoading sempre false aqui
+  } = useTranscriptions(user, false, fetchQuota);
 
-  // Buscar quota quando componente monta
   useEffect(() => {
     fetchQuota();
   }, []);
@@ -51,7 +56,55 @@ function HomePage() {
     await auth.signOut();
   };
 
-  const openModal = (transcription: Transcription) => {
+  const handleFileSelected = async (file: File) => {
+    // Validações
+    if (file.size > 200 * 1024 * 1024) {
+      setErrorMessage("O arquivo excede o limite de 200 MB.");
+      setPendingFile(null);
+      setConfirmOpen(true);
+      return;
+    }
+
+    if (!["video/mp4", "audio/mpeg"].includes(file.type)) {
+      setErrorMessage("Formato inválido. Apenas arquivos MP4 ou MP3 são aceitos.");
+      setPendingFile(null);
+      setConfirmOpen(true);
+      return;
+    }
+
+    // Validação de duração
+    try {
+      const durationSeconds = await getFileDuration(file); // duração em segundos
+
+      if (durationSeconds > quota.remainingSeconds) {
+        setErrorMessage(
+          `O arquivo excede a cota restante do usuário (${formatDuration(quota.remainingSeconds)})`
+        );
+        setPendingFile(null);
+        setConfirmOpen(true);
+        return;
+      }
+    } catch (err) {
+      setErrorMessage("Não foi possível determinar a duração do arquivo.");
+      setPendingFile(null);
+      setConfirmOpen(true);
+      return;
+    }
+
+    // Se passou nas validações
+    setErrorMessage(null);
+    setPendingFile(file);
+    setConfirmOpen(true);
+  };
+
+  const confirmUpload = async () => {
+    if (!pendingFile) return;
+    setConfirmOpen(false);
+    await handleUpload(pendingFile);
+    setPendingFile(null);
+  };
+
+  const openTranscriptionModal = (transcription: Transcription) => {
     setSelectedTranscription(transcription);
     setTranscriptionModalOpen(true);
   };
@@ -75,11 +128,8 @@ function HomePage() {
         <WelcomeSection />
 
         <div className="mb-6">
-          {/* Instruções do Upload */}
           <InfoCard />
-
-          {/* Botão de Upload */}
-          <UploadArea uploading={uploading} onUpload={handleUpload} />
+          <UploadArea uploading={uploading} onUpload={handleFileSelected} />
         </div>
 
         <FilterBar filter={filter} setFilter={setFilter} />
@@ -88,7 +138,7 @@ function HomePage() {
           loading={transcriptionsLoading}
           error={error}
           transcriptions={filteredTranscriptions}
-          onOpen={openModal}
+          onOpen={openTranscriptionModal}
           onDelete={baseHandleDelete}
           filter={filter}
         />
@@ -98,12 +148,25 @@ function HomePage() {
           open={transcriptionModalOpen}
           onClose={() => setTranscriptionModalOpen(false)}
         />
+
+        <ConfirmUploadModal
+          open={confirmOpen}
+          file={pendingFile}
+          quotaRemaining={quota.remaining}
+          errorMessage={errorMessage}
+          onConfirm={confirmUpload}
+          onCancel={() => {
+            setConfirmOpen(false);
+            setPendingFile(null);
+            setErrorMessage(null);
+          }}
+        />
       </main>
     </div>
   );
 }
 
-// Componente para o conteúdo das transcrições
+// Lista de transcrições
 interface TranscriptionsContentProps {
   loading: boolean;
   error: string | null;
@@ -125,10 +188,10 @@ function TranscriptionsContent({
   if (error) return <p className="text-red-500">Erro: {error}</p>;
 
   if (transcriptions.length === 0) {
-    if (filter === 'all') {
+    if (filter === "all") {
       return <p>Você ainda não fez nenhuma transcrição.</p>;
     } else {
-      return <p>Não há transcrições com o status de "{filter === 'pending' ? 'Em processamento' : filter === 'done' ? 'Concluídas' : 'Erros'}".</p>;
+      return <p>Não há transcrições com o status de "{filter === "pending" ? "Em processamento" : filter === "done" ? "Concluídas" : "Erros"}".</p>;
     }
   }
 
@@ -141,5 +204,4 @@ function TranscriptionsContent({
   );
 }
 
-// Exporta a HomePage protegida
 export default withAuth(HomePage);

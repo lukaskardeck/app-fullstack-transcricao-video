@@ -6,6 +6,7 @@ interface Quota {
   used: number;
   limit: number;
   remaining: number;
+  remainingSeconds: number;
   plan: string;
 }
 
@@ -14,6 +15,7 @@ export function useQuota(user: User | null) {
     used: 0, 
     limit: 0, 
     remaining: 0, 
+    remainingSeconds: 0,
     plan: "Free" 
   });
 
