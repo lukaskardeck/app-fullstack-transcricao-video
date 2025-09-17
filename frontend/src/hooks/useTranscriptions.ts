@@ -78,6 +78,7 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
 
     fetchTranscriptions();
   }, [user, authLoading]);
+  
 
   const handleUpload = async (file: File) => {
     if (!file || !user) return;
@@ -106,16 +107,38 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
       pollTranscriptionStatus(newTranscription.id);
     } catch (err: any) {
       // toast.error("Erro: " + err.message);
-      setError(err.message); 
+      setError(err.message);
     } finally {
       setUploading(false);
     }
   };
 
+
   const handleDelete = async (id: string) => {
-    // Implementar lógica de delete
-    console.log("Delete transcription:", id);
+    if (!user) return;
+
+    try {
+      const token = await user.getIdToken();
+
+      const res = await fetch(`http://localhost:8080/api/transcription/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || "Falha ao deletar transcrição");
+      }
+
+      // Remove do estado local
+      setTranscriptions((prev) => prev.filter((t) => t.id !== id));
+      toast.success("Transcrição deletada com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao deletar:", err);
+      toast.error(err.message || "Erro ao deletar transcrição");
+    }
   };
+
 
   return {
     transcriptions,

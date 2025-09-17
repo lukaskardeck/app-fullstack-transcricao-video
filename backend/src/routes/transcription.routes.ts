@@ -2,6 +2,7 @@ import { Router } from "express";
 import { verifyToken } from "../middleware/auth";
 import { 
     createTranscriptionRequest, 
+    deleteTranscription, 
     downloadTranscription, 
     getTranscription, 
     listTranscriptions, 
@@ -25,5 +26,8 @@ router.get("/download/:id", verifyToken, downloadTranscription);
 
 // PUT /api/transcription/:id
 router.put("/:id", verifyToken, updateTranscription);
+
+// DELETE /api/transcription/:id
+router.delete("/:id", verifyToken, deleteTranscription);
 
 export default router;

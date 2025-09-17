@@ -96,3 +96,25 @@ export const getTranscriptionsByUser = async (userId: string): Promise<Transcrip
 
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Transcription));
 };
+
+export async function deleteTranscriptionById(id: string, userId: string) {
+  try {
+    const docRef = collectionRef.doc(id);
+    const doc = await docRef.get();
+
+    if (!doc.exists) {
+      return null;
+    }
+
+    const data = doc.data();
+    if (data?.userId !== userId) {
+      return null; // não pertence ao usuário
+    }
+
+    await docRef.delete();
+    return { id, ...data };
+  } catch (err) {
+    console.error("Erro ao deletar transcrição:", err);
+    return null;
+  }
+}

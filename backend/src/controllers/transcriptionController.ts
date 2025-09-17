@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { getMediaDuration } from "../services/ffmpegService";
-import { createTranscription, getTranscriptionById, getTranscriptionsByUser, updateTranscriptionText } from "../models/TranscriptionModel";
+import { createTranscription, deleteTranscriptionById, getTranscriptionById, getTranscriptionsByUser, updateTranscriptionText } from "../models/TranscriptionModel";
 import { getUserById } from "../models/UserModel";
 import { createUsageLog, UsageStatus } from "../models/UsageLogModel";
 import { checkDailyQuota } from "../services/quotaService";
@@ -112,6 +112,26 @@ export const updateTranscription = async (req: Request, res: Response) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Erro interno no servidor" });
+  }
+};
+
+
+// Deletar transcrição
+export const deleteTranscription = async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const { id } = req.params;
+
+    const deleted = await deleteTranscriptionById(id, user.uid);
+
+    if (!deleted) {
+      return res.status(404).json({ error: "Transcrição não encontrada ou não pertence ao usuário" });
+    }
+
+    res.status(200).json({ message: "Transcrição deletada com sucesso" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Erro ao deletar transcrição" });
   }
 };
 

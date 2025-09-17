@@ -16,6 +16,7 @@ import { auth } from "../../lib/firebase";
 import InfoCard from "@/components/InfoCard";
 import ConfirmUploadModal from "@/components/ConfirmUploadModal";
 import { formatDuration, getFileDuration } from "@/utils/format";
+import DeleteTranscriptionModal from "@/components/DeleteTranscriptionModal";
 
 function HomePage() {
   const user = auth.currentUser!;
@@ -27,6 +28,9 @@ function HomePage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [transcriptSelectedForDeletion, setTranscriptSelectedForDeletion] = useState<string | null>(null);
 
   const { quota, fetchQuota } = useQuota(user);
   const {
@@ -104,6 +108,18 @@ function HomePage() {
     setPendingFile(null);
   };
 
+  const askDelete = (id: string) => {
+    setTranscriptSelectedForDeletion(id);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!transcriptSelectedForDeletion) return;
+    await baseHandleDelete(transcriptSelectedForDeletion);
+    setDeleteModalOpen(false);
+    setTranscriptSelectedForDeletion(null);
+  };
+
   const openTranscriptionModal = (transcription: Transcription) => {
     setSelectedTranscription(transcription);
     setTranscriptionModalOpen(true);
@@ -139,7 +155,7 @@ function HomePage() {
           error={error}
           transcriptions={filteredTranscriptions}
           onOpen={openTranscriptionModal}
-          onDelete={baseHandleDelete}
+          onDelete={askDelete}
           filter={filter}
         />
 
@@ -147,6 +163,12 @@ function HomePage() {
           transcription={selectedTranscription}
           open={transcriptionModalOpen}
           onClose={() => setTranscriptionModalOpen(false)}
+        />
+
+        <DeleteTranscriptionModal
+          isOpen={deleteModalOpen}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteModalOpen(false)}
         />
 
         <ConfirmUploadModal
