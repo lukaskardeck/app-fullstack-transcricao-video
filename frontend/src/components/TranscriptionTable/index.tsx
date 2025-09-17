@@ -19,8 +19,8 @@ export default function TranscriptionTable({
           <tr>
             <th className="px-4 py-2 border-b text-left">Arquivo</th>
             <th className="px-4 py-2 border-b text-left">Duração</th>
-            <th className="px-4 py-2 border-b text-left">Upload</th>
-            <th className="px-4 py-2 border-b text-left">Concluído</th>
+            <th className="px-4 py-2 border-b text-left">Upload em</th>
+            <th className="px-4 py-2 border-b text-left">Concluído em</th>
             <th className="px-4 py-2 border-b text-left">Status</th>
             <th className="px-4 py-2 border-b text-left">Ações</th>
           </tr>
@@ -36,21 +36,24 @@ export default function TranscriptionTable({
               <td className="px-4 py-2 border-b">
                 <div className="flex items-center gap-2">
                   {t.status === "done" && (
-                    <button
-                      onClick={() => onOpen(t)}
-                      className="text-gray-800 hover:text-gray-600 cursor-pointer"
-                      title="Ver transcrição"
-                    >
-                      <AiOutlineEye size={20} />
-                    </button>
+                    <>
+                      <button
+                        onClick={() => onOpen(t)}
+                        className="text-gray-800 hover:text-gray-600 cursor-pointer"
+                        title="Ver transcrição"
+                      >
+                        <AiOutlineEye size={20} />
+                      </button>
+
+                      <button
+                        onClick={() => onDelete(t.id)}
+                        className="text-red-600 hover:text-red-800 cursor-pointer"
+                        title="Excluir transcrição"
+                      >
+                        <AiOutlineDelete size={20} />
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => onDelete(t.id)}
-                    className="text-red-600 hover:text-red-800 cursor-pointer"
-                    title="Excluir transcrição"
-                  >
-                    <AiOutlineDelete size={20} />
-                  </button>
                 </div>
               </td>
             </tr>

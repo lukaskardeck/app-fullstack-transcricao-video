@@ -50,7 +50,7 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
     if (authLoading) {
       return;
     }
-    
+
     // Se terminou de carregar e não tem usuário, é erro
     if (!user) {
       setError("Usuário não autenticado.");
@@ -64,9 +64,9 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
         const res = await fetch("http://localhost:8080/api/transcription", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        
+
         if (!res.ok) throw new Error("Falha ao buscar transcrições");
-        
+
         const data = await res.json();
         setTranscriptions(data);
       } catch (err: any) {
@@ -79,10 +79,9 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
     fetchTranscriptions();
   }, [user, authLoading]);
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.length || !user) return;
-    
-    const file = e.target.files[0];
+  const handleUpload = async (file: File) => {
+    if (!file || !user) return;
+
     setUploading(true);
 
     try {
@@ -104,13 +103,12 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
       const newTranscription = await res.json();
       setTranscriptions((prev) => [newTranscription, ...prev]);
       toast.success("Arquivo enviado com sucesso!");
-
       pollTranscriptionStatus(newTranscription.id);
     } catch (err: any) {
-      toast.error("Erro: " + err.message);
+      // toast.error("Erro: " + err.message);
+      setError(err.message); 
     } finally {
       setUploading(false);
-      e.target.value = "";
     }
   };
 
@@ -123,6 +121,7 @@ export function useTranscriptions(user: User | null, authLoading: boolean, onTra
     transcriptions,
     loading,
     error,
+    setError,
     uploading,
     handleUpload,
     handleDelete
