@@ -1,67 +1,50 @@
 "use client";
 
+import LoadingScreen from "@/components/LoadingScreen";
+import LoginForm from "@/components/LoginForm";
+import RegisterForm from "@/components/RegisterForm";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../../lib/firebase";
 
-export default function LoginPage() {
-  const router = useRouter();
+export default function AuthPage() {
+  const [isLogin, setIsLogin] = useState(true);
+  const [successfulRegistration, setSuccessfulRegistration] = useState<null | { message: string; subMessage?: string }>(null);
 
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // validações simples
-    if (!email.includes("@")) {
-      setMsg("Insira um e-mail válido");
-      return;
-    }
-    if (password.length < 8) {
-      setMsg("A senha deve ter pelo menos 8 caracteres");
-      return;
-    }
-
-    try {
-      const userCred = await signInWithEmailAndPassword(auth, email, password);
-      const token = await userCred.user.getIdToken();
-      console.log("Token Firebase:", token);
-
-      setMsg(`Logado como ${userCred.user.email}`);
-
-      // redireciona para a home (raiz "/")
-      router.push("/");
-    } catch (err: any) {
-      setMsg("Erro: " + err.message);
-    }
-  };
+  if (successfulRegistration) {
+    return (
+      <LoadingScreen
+        message={successfulRegistration.message}
+        subMessage={successfulRegistration.subMessage}
+      />
+    );
+  }
 
   return (
-    <section className="bg-white shadow-md rounded-xl p-6 w-full max-w-md">
-      <h1 className="text-2xl font-bold mb-4 text-center">Login</h1>
-      <form onSubmit={handleLogin} className="flex flex-col gap-3">
-        <input
-          type="email"
-          placeholder="E-mail"
-          className="border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <input
-          type="password"
-          placeholder="Senha"
-          className="border p-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <button className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded transition">
-          Entrar
-        </button>
-      </form>
-      {msg && <p className="mt-4 text-center">{msg}</p>}
-    </section>
+    <div className="flex min-h-screen">
+      {/* Lado esquerdo (branding) */}
+      <div className="w-1/2 bg-gradient-to-b from-gray-900 to-black flex items-center justify-center">
+        <h1 className="text-3xl font-bold text-white">TRANSCRIBER APP.</h1>
+      </div>
+
+      {/* Lado direito (form) */}
+      <div className="w-1/2 flex items-center justify-center">
+        <div className="w-full max-w-md px-8">
+          {isLogin ? (
+            <LoginForm
+              onSwitch={() => setIsLogin(false)}
+              onSuccess={(message, subMessage) => {
+                setSuccessfulRegistration({ message, subMessage });
+              }}
+            />
+          ) : (
+            <RegisterForm
+              onSwitch={() => setIsLogin(true)}
+              onSuccess={(message, subMessage) => {
+                setSuccessfulRegistration({ message, subMessage });
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
