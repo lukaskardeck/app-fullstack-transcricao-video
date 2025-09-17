@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { AiOutlineMail, AiOutlineLock } from "react-icons/ai";
+import { getFirebaseErrorMessage } from "../../../lib/firebaseError";
 
 interface LoginFormProps {
     onSwitch: () => void;
@@ -37,7 +38,8 @@ export default function LoginForm({ onSwitch, onSuccess }: LoginFormProps) {
             onSuccess("Login realizado com sucesso!", "Redirecionando...");
             router.push("/");
         } catch (err: any) {
-            setMsg("Erro: " + err.message);
+            const code = err.code || "unknown";
+            setMsg(getFirebaseErrorMessage(code));
         } finally {
             setLoading(false);
         }

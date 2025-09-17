@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../../../lib/firebase";
 import { AiOutlineMail, AiOutlineLock, AiOutlineUser } from "react-icons/ai";
+import { getFirebaseErrorMessage } from "../../../lib/firebaseError";
 
 interface RegisterFormProps {
     onSwitch: () => void;
@@ -53,7 +54,8 @@ export default function RegisterForm({ onSwitch, onSuccess }: RegisterFormProps)
             onSuccess("Conta criada com sucesso!", "Redirecionando...");
             setTimeout(() => router.push("/"), 1500);
         } catch (err: any) {
-            setMsg("Erro: " + err.message);
+            const code = err.code || "unknown";
+            setMsg(getFirebaseErrorMessage(code));
         } finally {
             setLoading(false);
         }
